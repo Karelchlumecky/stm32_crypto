@@ -1,0 +1,2 @@
+cryptography>=46
+intelhex>=2.3.0

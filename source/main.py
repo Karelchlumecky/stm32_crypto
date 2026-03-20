@@ -5,6 +5,8 @@ For STM32.
 
 import argparse
 from intelhex import IntelHex
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
 
 class VaribleBank:
     Sign_address = 0
@@ -61,7 +63,30 @@ def sign():
     data = ih.tobinarray(int(VaribleBank.S_address, 16), int(VaribleBank.E_address, 16))
 
 def generate():
-    print("nvm")
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048
+    )
+
+    public_key = private_key.public_key()
+
+    with open(VaribleBank.Private_key_file_pem, "wb") as file:
+        file.write(
+            private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+        )
+
+    with open(VaribleBank.Public_key_file_pem, "wb") as file:
+        file.write(
+            public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            )
+        )
+
 
 
 def parse_input_params():
