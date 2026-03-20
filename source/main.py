@@ -8,6 +8,17 @@ from intelhex import IntelHex
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization, hashes
 
+class DebugInfo:
+    Verbosity = False
+
+    @classmethod
+    def set_verbosity(cls, arg_verbosity):
+        cls.Verbosity = arg_verbosity
+
+    @classmethod
+    def debug_print(cls, arg_text):
+        print(arg_text)
+
 class VaribleBank:
     Sign_address = 0
     S_address = 0
@@ -29,8 +40,8 @@ class VaribleBank:
              cls.Hash,
              cls.Private_key_file_pem) = args.sign
 
-        elif args.verify:
-            cls.Action = "Verify"
+        elif args.authenticate:
+            cls.Action = "Authenticate"
             (cls.Hex_file,
              cls.Sign_address,
              cls.S_address,
@@ -92,7 +103,7 @@ def choose_hash():
     else:
         print("Wrong hash choosed")
 
-def verify():
+def authenticate():
     print("nvm")
 
 def sign():
@@ -136,12 +147,14 @@ def parse_input_params():
                         metavar = ("Hex_file", "Sign_address", "Start_address",
                                    "End_address", "Hash", "Private_key_file"),
                         help="Sign your program")
-    pars_group.add_argument("-v", "--verify", nargs=6,
+    pars_group.add_argument("-a", "--authenticate", nargs=6,
                         metavar = ("Hex_file", "Sign_address", "Start_address",
                                     "End_address", "Hash", "Public_key_file"),
-                        help="Verify your program")
+                        help="authenticate your program")
     pars_group.add_argument("-p", "--print", action="store_true",
-                            help = "Print all supported Hashes")
+                            help = "Print all supported hashes")
+    parser.add_argument("-v", "--v", action="store_true",
+                        help="Make the program more loud")
 
     args = parser.parse_args()
     VaribleBank.load_args(args)
@@ -153,8 +166,8 @@ def main():
     if VaribleBank.Action == "Sign":
         sign()
 
-    elif VaribleBank.Action == "Verify":
-        verify()
+    elif VaribleBank.Action == "Authenticate":
+        authenticate()
 
     elif VaribleBank.Action == "Generate":
         generate()
