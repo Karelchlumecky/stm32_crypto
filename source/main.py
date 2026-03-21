@@ -17,7 +17,8 @@ class DebugInfo:
 
     @classmethod
     def debug_print(cls, arg_text):
-        print(arg_text)
+        if cls.Verbosity:
+            print(arg_text)
 
 class VaribleBank:
     Sign_address = 0
@@ -58,23 +59,27 @@ class VaribleBank:
             cls.Action = "Print"
 
     @classmethod
-    def print_args(cls):
-        print(f"""
+    def get_args(cls):
+        return f"""
               Action: {cls.Action}
               Hex: {cls.Hex_file}
               Sign Address: {cls.Sign_address}
               Start Address: {cls.S_address}
               End Address: {cls.E_address}
               Hash: {cls.Hash}
-              Private key:{cls.Private_key_file_pem}
-              Public key: {cls.Public_key_file_pem}""")
+              Private key: {cls.Private_key_file_pem}
+              Public key: {cls.Public_key_file_pem}"""
 
 def print_supported_hashes():
     print("""
+        Hashes:
         SHA224, SHA256, SHA384, SHA512,
         SHA3-224, SHA3-256, SHA3-384, SHA3-512,
         SHAKE128_X -> X = Number of bytes
         SHAKE256_X -> X = Number of bytes
+          
+        Encryption:
+        Asymetrical RSA-2048
     """)
 
 def choose_hash():
@@ -153,15 +158,16 @@ def parse_input_params():
                         help="authenticate your program")
     pars_group.add_argument("-p", "--print", action="store_true",
                             help = "Print all supported hashes")
-    parser.add_argument("-v", "--v", action="store_true",
+    parser.add_argument("-v", "--verbosity", action="store_true",
                         help="Make the program more loud")
 
     args = parser.parse_args()
+    DebugInfo.set_verbosity(args.verbosity)
     VaribleBank.load_args(args)
 
 def main():
     parse_input_params()
-    VaribleBank.print_args()
+    DebugInfo.debug_print(VaribleBank.get_args())
 
     if VaribleBank.Action == "Sign":
         sign()
