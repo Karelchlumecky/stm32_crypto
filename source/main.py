@@ -3,9 +3,12 @@ Tool for generation and work with SHA256 hash and RSA encryption
 For STM32.
 """
 
+import os
 import argparse
 from intelhex import IntelHex
 from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from cryptography.hazmat.primitives import serialization, hashes
 
 class DebugInfo:
@@ -39,7 +42,8 @@ class VaribleBank:
              cls.S_address,
              cls.E_address,
              cls.Hash,
-             cls.Private_key_file_pem) = args.sign
+             cls.Private_key_file_pem,
+             cls.Public_key_file_pem) = args.sign
 
         elif args.authenticate:
             cls.Action = "Authenticate"
@@ -108,12 +112,82 @@ def choose_hash():
     else:
         print("Wrong hash choosed")
 
+def string_to_hex_file(hex_obj, data, address, length):
+    if isinstance(address, str):
+        address = int(address, 16)
+
+    if isinstance(data, bytes):
+        if len(data) != length:
+            raise ValueError("Wrong data length")
+        hex_obj.frombytes(data, offset=address)
+        return
+
+    if isinstance(data, str):
+        value = int(data, 16)
+    else:
+        value = int(data)
+
+    if value >= (1 << (length * 8)):
+        raise ValueError("Wrong data length")
+
+    hex_obj.frombytes(value.to_bytes(length, "big"), offset=address)
+
 def authenticate():
     print("nvm")
 
 def sign():
     ih = IntelHex(VaribleBank.Hex_file)
-    data = ih.tobinarray(int(VaribleBank.S_address, 16), int(VaribleBank.E_address, 16))
+    start_address = int(VaribleBank.S_address, 16)
+    end_address = int(VaribleBank.E_address, 16)
+    data = ih.tobinarray(start_address, end_address)
+
+    hash_func = hashes.Hash(choose_hash())
+    hash_func.update(data)
+    hashed_hex = hash_func.finalize()
+
+    with open(VaribleBank.Private_key_file_pem, "rb") as f:
+        private_key = serialization.load_pem_private_key(
+            f.read(),
+            password=None
+        )
+
+    signature = private_key.sign(
+        hashed_hex,
+        padding.PSS(
+            mgf=padding.MGF1(choose_hash()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        Prehashed(choose_hash())
+    )
+
+    offset = int(VaribleBank.Sign_address, 16)
+    string_to_hex_file(ih, "0x12345678", offset, 4)
+    string_to_hex_file(ih, VaribleBank.S_address, offset + 0x10, 4)
+    string_to_hex_file(ih, VaribleBank.E_address, offset + 0x14, 4)
+    string_to_hex_file(ih, signature, offset + 0x20, 256)
+
+    with open(VaribleBank.Public_key_file_pem, "rb") as f:
+        pem_data = f.read()
+
+    public_key = serialization.load_pem_public_key(pem_data)
+
+    if not isinstance(public_key, rsa.RSAPublicKey):
+        raise ValueError("Není to RSA public key")
+
+    numbers = public_key.public_numbers()
+    n = numbers.n  # modulus
+    e = numbers.e  # exponent
+
+    modulus_bytes = n.to_bytes(256, byteorder="big")
+    exponent_bytes = e.to_bytes(4, byteorder="big")
+
+    string_to_hex_file(ih, exponent_bytes, offset + 0x130, 4)
+    string_to_hex_file(ih, modulus_bytes, offset + 0x140, 256)
+
+    base = os.path.basename(VaribleBank.Hex_file)
+    name, ext = os.path.splitext(base)
+    output_file = "../output/" + name + "_signed" + ext
+    ih.write_hex_file(output_file)
 
 def generate():
     private_key = rsa.generate_private_key(
@@ -148,9 +222,9 @@ def parse_input_params():
     pars_group.add_argument("-g", "--generate", nargs = 2,
                             metavar = ("Private_key_file", "Public_key_file"),
                             help = "Generate private and public key")
-    pars_group.add_argument("-s", "--sign", nargs=6,
+    pars_group.add_argument("-s", "--sign", nargs=7,
                         metavar = ("Hex_file", "Sign_address", "Start_address",
-                                   "End_address", "Hash", "Private_key_file"),
+                                   "End_address", "Hash", "Private_key_file", "Public_key_file"),
                         help="Sign your program")
     pars_group.add_argument("-a", "--authenticate", nargs=6,
                         metavar = ("Hex_file", "Sign_address", "Start_address",
