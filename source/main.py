@@ -130,16 +130,23 @@ def string_to_hex_file(hex_obj, data, address, length):
     if value >= (1 << (length * 8)):
         raise ValueError("Wrong data length")
 
-    hex_obj.frombytes(value.to_bytes(length, "big"), offset=address)
+    hex_obj.frombytes(value.to_bytes(length, "little"), offset=address)
 
 def authenticate():
-    print("nvm")
+    ih = IntelHex(VaribleBank.Hex_file)
+
 
 def sign():
     ih = IntelHex(VaribleBank.Hex_file)
     start_address = int(VaribleBank.S_address, 16)
     end_address = int(VaribleBank.E_address, 16)
-    data = ih.tobinarray(start_address, end_address)
+    data = ih.tobinarray(start = start_address, end = end_address)
+    DebugInfo.debug_print(f"""
+        Header start: {hex(int(VaribleBank.Sign_address, 16))}
+        start: {hex(start_address)}
+        end:   {hex(end_address)}
+        len:   {hex(len(data))}
+    """)
 
     hash_func = hashes.Hash(choose_hash())
     hash_func.update(data)
@@ -153,10 +160,7 @@ def sign():
 
     signature = private_key.sign(
         hashed_hex,
-        padding.PSS(
-            mgf=padding.MGF1(choose_hash()),
-            salt_length=padding.PSS.MAX_LENGTH
-        ),
+        padding.PKCS1v15(),
         Prehashed(choose_hash())
     )
 
@@ -172,14 +176,14 @@ def sign():
     public_key = serialization.load_pem_public_key(pem_data)
 
     if not isinstance(public_key, rsa.RSAPublicKey):
-        raise ValueError("Není to RSA public key")
+        raise ValueError("Not RSA key")
 
     numbers = public_key.public_numbers()
     n = numbers.n  # modulus
     e = numbers.e  # exponent
 
-    modulus_bytes = n.to_bytes(256, byteorder="big")
-    exponent_bytes = e.to_bytes(4, byteorder="big")
+    modulus_bytes = n.to_bytes(256, byteorder="little")
+    exponent_bytes = e.to_bytes(4, byteorder="little")
 
     string_to_hex_file(ih, exponent_bytes, offset + 0x130, 4)
     string_to_hex_file(ih, modulus_bytes, offset + 0x140, 256)
