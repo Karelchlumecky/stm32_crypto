@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.exceptions import InvalidSignature
 
 class DebugInfo:
     Verbosity = False
@@ -52,7 +53,7 @@ class VaribleBank:
              cls.S_address,
              cls.E_address,
              cls.Hash,
-             cls.Public_key_file_pem) = args.verify
+             cls.Public_key_file_pem) = args.authenticate
 
         elif args.generate:
             cls.Action = "Generate"
@@ -134,7 +135,44 @@ def string_to_hex_file(hex_obj, data, address, length):
 
 def authenticate():
     ih = IntelHex(VaribleBank.Hex_file)
+    header_start = int(VaribleBank.Sign_address, 16)
+    start_address = ih.tobinarray(start=header_start + 0x10, size = 4)
+    start_value = int.from_bytes(start_address, byteorder='little')
+    end_address = ih.tobinarray(start=header_start + 0x14, size = 4)
+    end_value = int.from_bytes(end_address, byteorder='little')
+    DebugInfo.debug_print(f"""
+        Header start: {hex(header_start)}
+        start: {hex(start_value)}
+        end:   {hex(end_value)}
+        len:   {hex(end_value - start_value + 1)}
+    """)
 
+    data = ih.tobinarray(start = start_value, end = end_value)
+    hash_func = hashes.Hash(choose_hash())
+    hash_func.update(data)
+    hashed_hex = hash_func.finalize()
+
+    signature = ih.tobinarray(start = header_start + 0x20, size = 256)
+    signature_bytes = bytes(signature)
+
+    modulus_bytes = bytes(ih.tobinarray(start=header_start + 0x140, size = 256))
+    exponent_bytes = bytes(ih.tobinarray(start=header_start + 0x130, size = 4))
+    modulus_int = int.from_bytes(modulus_bytes, byteorder='little')
+    exponent_int = int.from_bytes(exponent_bytes, byteorder='little')
+
+    public_numbers = rsa.RSAPublicNumbers(e = exponent_int, n = modulus_int)
+    public_key = public_numbers.public_key()
+
+    try:
+        public_key.verify(
+            signature_bytes,
+            hashed_hex,
+            padding.PKCS1v15(),
+            Prehashed(choose_hash())
+        )
+        print("The software is verified")
+    except InvalidSignature:
+        print("Software is not verified")
 
 def sign():
     ih = IntelHex(VaribleBank.Hex_file)
